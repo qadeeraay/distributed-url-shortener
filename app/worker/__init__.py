@@ -1,0 +1,1 @@
+"""Analytics worker consumer module."""
