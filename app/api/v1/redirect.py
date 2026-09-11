@@ -25,6 +25,23 @@ logger = logging.getLogger("url_shortener.redirect")
 router = APIRouter(tags=["Redirect"])
 
 
+def get_safe_redirect_url(target_url: str) -> str:
+    parsed = urllib.parse.urlparse(target_url)
+    if parsed.scheme in ("http", "https") and bool(parsed.netloc):
+        return urllib.parse.urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment
+        ))
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Destination URL contains an unsupported protocol or invalid host."
+    )
+
+
 @router.get("/r/{short_code}")
 async def redirect_short_url(
     short_code: str,
@@ -130,16 +147,12 @@ async def redirect_short_url(
     URL_REDIRECT_LATENCY_SECONDS.labels(cache_status=cache_status).observe(latency)
     HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="/r/{short_code}", status=302).inc()
 
-    parsed = urllib.parse.urlsplit(destination_url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Destination URL contains an unsupported protocol."
-        )
+    safe_target = get_safe_redirect_url(destination_url)
 
     return RedirectResponse(
-        url=destination_url,
+        url=safe_target,
         status_code=settings.REDIRECT_HTTP_STATUS
     )
+
 
 
