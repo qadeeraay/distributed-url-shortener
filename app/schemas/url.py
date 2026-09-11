@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 from pydantic import BaseModel, HttpUrl, Field, field_validator
 from app.core.base62 import validate_custom_alias
 

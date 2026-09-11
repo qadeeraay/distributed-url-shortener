@@ -1,5 +1,7 @@
 # Distributed URL Shortener & Clickstream Analytics Engine
 
+[![CI Pipeline](https://github.com/qadeeraay/distributed-url-shortener/actions/workflows/ci.yml/badge.svg)](https://github.com/qadeeraay/distributed-url-shortener/actions/workflows/ci.yml)
+[![CodeQL Security](https://github.com/qadeeraay/distributed-url-shortener/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/qadeeraay/distributed-url-shortener/actions/workflows/codeql-analysis.yml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg)](https://www.postgresql.org/)

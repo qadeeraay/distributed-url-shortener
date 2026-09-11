@@ -23,7 +23,7 @@ def main():
     print("=" * 65)
 
     print("\n[1] Demonstrating Bijective Base62 Key Generation...")
-    print(f"    - Base62 Alphabet Size: 62 characters ([0-9a-zA-Z])")
+    print("    - Base62 Alphabet Size: 62 characters ([0-9a-zA-Z])")
     print(f"    - Initial Monotonic Sequence Offset: {BASE62_ID_OFFSET:,} (62^4)")
 
     sample_ids = [1, 2, 100, 10_000, 1_000_000]

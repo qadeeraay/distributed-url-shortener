@@ -35,10 +35,10 @@ async def worker(client: httpx.AsyncClient, short_code: str, num_requests: int, 
 
 
 async def run_benchmark():
-    print(f"============================================================")
-    print(f" Distributed URL Shortener - Production Load Benchmark")
+    print("============================================================")
+    print(" Distributed URL Shortener - Production Load Benchmark")
     print(f" Total Requests: {TOTAL_REQUESTS} | Concurrency: {CONCURRENCY}")
-    print(f"============================================================")
+    print("============================================================")
 
     async with httpx.AsyncClient(timeout=10.0) as setup_client:
         try:

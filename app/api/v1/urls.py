@@ -1,8 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func, desc
-from typing import Optional
+from sqlalchemy import select, func, desc
 
 from app.config import settings
 from app.db.session import get_db
