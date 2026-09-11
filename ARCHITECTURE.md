@@ -61,8 +61,8 @@ flowchart TD
 
 ## 2. Deep Dive: Bijective Base62 Key Generation
 
-### The Problem with Tutorial Implementations
-Tutorial projects generate random 6-character strings (e.g., `crypto.randomBytes(6)` or `Math.random()`). As the dataset reaches millions of entries, birthday paradox collisions increase exponentially, forcing the application into database re-query retry loops ($O(N)$ worst-case).
+### The Problem with Naive Random Generation & MD5 Truncation
+Naive architectures generate random 6-character strings (e.g., `crypto.randomBytes(6)` or `Math.random()`) or truncated cryptographic hashes (e.g., MD5/SHA256). As the dataset reaches millions of entries, birthday paradox collisions increase exponentially, forcing the application into database re-query retry loops ($O(N)$ worst-case).
 
 ### The Production Solution
 We map a monotonic 64-bit integer sequence from PostgreSQL directly to Base62 (`[0-9a-zA-Z]`):

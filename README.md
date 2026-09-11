@@ -11,7 +11,7 @@ A high-throughput, distributed URL shortener and event-driven clickstream analyt
 
 ---
 
-## System Design Highlights (Why This Stands Out on a Resume)
+## System Design & Engineering Highlights
 
 - **Zero-Collision Key Generation:** Replaced naive random string generators with bijective Base62 encoding mapped over monotonic 64-bit sequences ($O(1)$ generation, 0% collision probability).
 - **Sub-5ms Hot Path:** High-speed redirect engine powered by Redis Cache-Aside, serving hot URLs in **< 2ms**.
@@ -171,10 +171,10 @@ python scripts/benchmark.py
 
 ---
 
-## Resume Bullet Points for Candidates
+## Production Metrics & Operational Impact
 
-Highlight this project on your resume with these battle-tested, metric-grounded bullet points:
+Key architectural benchmarks and performance achievements:
 
-> - *"Architected a distributed URL shortener handling 5,500+ RPS with sub-5ms p99 redirect latency using Base62 bijective encoding over monotonic 64-bit sequences and Redis cache-aside."*
-> - *"Engineered a two-tier anti-cache penetration defense combining an algorithmic Bitset Bloom filter and negative caching, eliminating 100% of malicious database query exhaustion from non-existent URL scans."*
-> - *"Designed a decoupled, asynchronous clickstream analytics pipeline leveraging Redis Streams and consumer groups, offloading user-agent parsing and hourly time-series rollups from the critical redirect path."*
+> - *"High-throughput distributed URL shortening engine handling 5,500+ RPS with sub-5ms p99 redirect latency using Base62 bijective encoding over monotonic 64-bit sequences and Redis cache-aside."*
+> - *"Two-tier anti-cache penetration defense combining an algorithmic Bitset Bloom filter and negative caching, eliminating 100% of malicious database query exhaustion from non-existent URL scans."*
+> - *"Decoupled, asynchronous clickstream analytics pipeline leveraging Redis Streams and consumer groups, offloading user-agent parsing and hourly time-series rollups from the critical redirect path."*
