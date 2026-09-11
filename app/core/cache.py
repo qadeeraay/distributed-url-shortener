@@ -21,8 +21,9 @@ async def get_redis_pool() -> redis.Redis:
             if getattr(_redis_pool, "_bound_loop", None) != id(current_loop):
                 _redis_pool = redis.from_url(settings.redis_url, decode_responses=True)
                 setattr(_redis_pool, "_bound_loop", id(current_loop))
-        except RuntimeError:
-            pass
+        except RuntimeError as err:
+            logger.debug("Active event loop check skipped: %s", err)
+
     return _redis_pool
 
 
