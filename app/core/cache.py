@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from typing import Optional, Dict, Any
@@ -5,12 +6,11 @@ import redis.asyncio as redis
 from app.config import settings
 from app.core.metrics import CACHE_OPERATIONS_TOTAL
 
-import asyncio
-
 logger = logging.getLogger("url_shortener.cache")
 
 _redis_pool: Optional[redis.Redis] = None
 _pool_loop = None
+
 
 
 async def get_redis_pool() -> redis.Redis:

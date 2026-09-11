@@ -1,6 +1,7 @@
 import time
 import json
 import logging
+import urllib.parse
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, HTTPException, status, Depends
 from fastapi.responses import RedirectResponse
@@ -13,6 +14,7 @@ from app.db.session import get_db
 from app.db.models import URL
 from app.core.bloom import RedisBloomFilter
 from app.core.cache import URLCacheManager, get_redis
+
 from app.core.metrics import (
     URL_REDIRECT_LATENCY_SECONDS,
     CACHE_OPERATIONS_TOTAL,
@@ -79,15 +81,15 @@ async def redirect_short_url(
         if not url_record or not url_record.is_active:
             try:
                 await cache_mgr.set_negative_cache(short_code)
-            except Exception:
-                pass
+            except Exception as err:
+                logger.debug("Negative cache write deferred: %s", err)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="URL not found.")
 
         if url_record.is_expired():
             try:
                 await cache_mgr.invalidate_url(short_code)
-            except Exception:
-                pass
+            except Exception as err:
+                logger.debug("Cache invalidation deferred: %s", err)
             raise HTTPException(status_code=status.HTTP_410_GONE, detail="URL has expired.")
 
         destination_url = url_record.original_url
@@ -103,7 +105,7 @@ async def redirect_short_url(
             )
             await bloom.add(short_code)
         except Exception as err:
-            logger.warning("Cache write-through failed for %s: %s", short_code, err)
+            logger.warning("Cache write-through failed for record ID %d: %s", url_record.id, err)
 
     # 3. Non-blocking clickstream dispatch to Redis Streams
     client_ip = request.client.host if request.client else "127.0.0.1"
@@ -128,8 +130,16 @@ async def redirect_short_url(
     URL_REDIRECT_LATENCY_SECONDS.labels(cache_status=cache_status).observe(latency)
     HTTP_REQUESTS_TOTAL.labels(method="GET", endpoint="/r/{short_code}", status=302).inc()
 
+    parsed = urllib.parse.urlsplit(destination_url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Destination URL contains an unsupported protocol."
+        )
+
     return RedirectResponse(
         url=destination_url,
         status_code=settings.REDIRECT_HTTP_STATUS
     )
+
 

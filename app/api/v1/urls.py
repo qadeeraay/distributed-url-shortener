@@ -94,7 +94,7 @@ async def create_short_url(
             }
         )
     except Exception as err:
-        logger.warning("Failed to warm cache for %s: %s", short_code, err)
+        logger.warning("Failed to warm cache for record ID %d: %s", new_url.id, err)
 
     return URLResponse(
         short_code=short_code,
@@ -262,5 +262,6 @@ async def delete_short_url(
         cache_mgr = URLCacheManager(redis_client)
         await cache_mgr.invalidate_url(short_code)
     except Exception as err:
-        logger.warning("Cache invalidation failed for URL %s: %s", short_code, err)
+        logger.warning("Cache invalidation failed for record ID %d: %s", url_record.id, err)
+
 
