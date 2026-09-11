@@ -43,11 +43,11 @@ jobs:
 
     - name: Run Core Algorithmic & Unit Tests
       run: |
-        python3 -m unittest discover -s tests -p "test_base62.py" -v
+        PYTHONPATH=. python3 -m unittest discover -s tests -p "test_base62.py" -v
 
     - name: Run Integration & Bloom Filter Tests
       run: |
-        pytest tests/test_bloom.py -v
+        PYTHONPATH=. python3 -m pytest tests/test_bloom.py -v
 
     - name: Run Interactive Demo Verification
       run: |
