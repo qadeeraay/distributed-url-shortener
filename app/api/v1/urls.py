@@ -288,4 +288,4 @@ async def delete_short_url(
         await cache_mgr.invalidate_url(short_code)
         await redis_client.aclose()
     except Exception as e:
-        logger.warning(f"Cache invalidation failed for deactivated URL {short_code}: {e}")
+        logger.warning("Cache invalidation failed for URL ID %d: %s", url_obj.id, e)
