@@ -24,9 +24,9 @@ A high-throughput, distributed URL shortener and event-driven clickstream analyt
 
 ---
 
-## Architectural Architecture
+## System Architecture
 
-```
+```text
 HTTP Client ──> [ FastAPI Gateway ] ──(Cache Hit: <2ms)──> [ Redis Cache-Aside ]
                        │                                             │
                        ├──(Miss)──> [ Bitset Bloom Filter ]          │
@@ -58,6 +58,7 @@ docker compose up -d --build
 ```
 
 Verify services:
+
 ```bash
 # Healthcheck verification
 curl http://localhost:8000/healthz
@@ -84,12 +85,15 @@ make worker
 ## API Specification & Examples
 
 ### 1. Create Short URL (Auto-Generated Base62)
+
 ```bash
 curl -X POST http://localhost:8000/api/v1/urls \
   -H "Content-Type: application/json" \
   -d '{"url": "https://deepmind.google/technologies/gemini/", "expires_in_hours": 72}'
 ```
+
 **Response (HTTP 201):**
+
 ```json
 {
   "short_code": "k8sA1z",
@@ -103,6 +107,7 @@ curl -X POST http://localhost:8000/api/v1/urls \
 ```
 
 ### 2. Create Short URL with Custom Alias
+
 ```bash
 curl -X POST http://localhost:8000/api/v1/urls \
   -H "Content-Type: application/json" \
@@ -110,20 +115,26 @@ curl -X POST http://localhost:8000/api/v1/urls \
 ```
 
 ### 3. Access Short URL (Sub-5ms Hot Path)
+
 ```bash
 curl -I http://localhost:8000/r/k8sA1z
 ```
+
 **Response (HTTP 302):**
+
 ```http
 HTTP/1.1 302 Found
 location: https://deepmind.google/technologies/gemini/
 ```
 
 ### 4. Fetch Rich URL Analytics
+
 ```bash
 curl http://localhost:8000/api/v1/urls/k8sA1z/analytics
 ```
+
 **Response (HTTP 200):**
+
 ```json
 {
   "short_code": "k8sA1z",
@@ -145,21 +156,26 @@ curl http://localhost:8000/api/v1/urls/k8sA1z/analytics
 ## Automated Testing & Benchmarks
 
 ### Run Automated Tests
+
 ```bash
 make test
 ```
+
 The test suite validates:
+
 - Base62 bijective roundtrip and zero-collision mathematical guarantees across 10,000 monotonic allocations.
 - Bloom filter offset distribution and membership proofs.
 - API endpoints: URL creation, custom alias reserving, duplicate conflict handling (409), redirect accuracy (302), and soft deletion.
 
 ### Run Concurrency Load Benchmark
+
 ```bash
 python scripts/benchmark.py
 ```
 
 **Benchmark Results under High Concurrency (50 workers, 2,000 requests):**
-```
+
+```text
 ------------------ BENCHMARK RESULTS ------------------
  Duration:           0.36 seconds
  Throughput:         5,540.2 req/sec
@@ -173,10 +189,8 @@ python scripts/benchmark.py
 
 ---
 
-## Production Metrics & Operational Impact
+## Production Considerations & Performance
 
-Key architectural benchmarks and performance achievements:
-
-> - *"High-throughput distributed URL shortening engine handling 5,500+ RPS with sub-5ms p99 redirect latency using Base62 bijective encoding over monotonic 64-bit sequences and Redis cache-aside."*
-> - *"Two-tier anti-cache penetration defense combining an algorithmic Bitset Bloom filter and negative caching, eliminating 100% of malicious database query exhaustion from non-existent URL scans."*
-> - *"Decoupled, asynchronous clickstream analytics pipeline leveraging Redis Streams and consumer groups, offloading user-agent parsing and hourly time-series rollups from the critical redirect path."*
+- **Throughput & Hot-Path Latency:** Sustains 5,500+ RPS with sub-5ms p99 redirect latency when serving from Redis cache-aside.
+- **Anti-Cache Penetration Defense:** Double-hashing Bitset Bloom filter rejects non-existent short code scans before hitting PostgreSQL, backed by a 60-second negative cache TTL.
+- **Decoupled Stream Processing:** Uses Redis Streams (`XADD` / `XREADGROUP`) to decouple analytics ingestion from client redirects, ensuring analytical persistence never adds latency to user redirection.
