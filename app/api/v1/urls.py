@@ -1,7 +1,10 @@
+import logging
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
+
+logger = logging.getLogger("url_shortener.api")
 
 from app.config import settings
 from app.db.session import get_db
@@ -284,5 +287,5 @@ async def delete_short_url(
         cache_mgr = URLCacheManager(redis_client)
         await cache_mgr.invalidate_url(short_code)
         await redis_client.aclose()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Cache invalidation failed for deactivated URL {short_code}: {e}")

@@ -170,4 +170,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(consumer.run())
     except KeyboardInterrupt:
-        pass
+        logger.info("Analytics consumer terminated by user.")

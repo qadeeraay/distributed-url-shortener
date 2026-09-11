@@ -1,5 +1,6 @@
 import time
 import json
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, HTTPException, status, Depends
 from fastapi.responses import RedirectResponse
@@ -18,6 +19,7 @@ from app.core.metrics import (
     HTTP_REQUESTS_TOTAL
 )
 
+logger = logging.getLogger("url_shortener.redirect")
 router = APIRouter(tags=["Redirect"])
 
 
@@ -43,13 +45,14 @@ async def redirect_short_url(
     start_time = time.perf_counter()
     destination_url = None
     cache_status = "miss"
-    redis_available = True
+    redis_available = False
+    redis_client = None
 
     try:
         redis_client = get_redis()
-    except Exception:
-        redis_available = False
-        redis_client = None
+        redis_available = True
+    except Exception as e:
+        logger.warning(f"Redis unavailable for redirect: {e}")
 
     try:
         if redis_available and redis_client:
@@ -136,8 +139,8 @@ async def redirect_short_url(
                     {"payload": json.dumps(click_payload)},
                     maxlen=100_000
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to record clickstream event to Redis Stream: {e}")
 
     finally:
         if redis_available and redis_client:
