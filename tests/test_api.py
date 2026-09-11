@@ -8,7 +8,7 @@ try:
     from app.main import app
     from app.db.models import Base
     from app.db.session import get_db
-    HAS_DEPS = True
+    HAS_DEPS = bool(httpx and aiosqlite)
 except ImportError:
     HAS_DEPS = False
 
