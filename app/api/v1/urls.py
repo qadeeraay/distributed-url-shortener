@@ -1,10 +1,10 @@
+import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
-
-logger = logging.getLogger("url_shortener.api")
+import redis.asyncio as aioredis
 
 from app.config import settings
 from app.db.session import get_db
@@ -17,28 +17,22 @@ from app.schemas.url import (
 )
 from app.core.base62 import encode, validate_custom_alias
 from app.core.bloom import RedisBloomFilter
-from app.core.cache import URLCacheManager
-import redis.asyncio as aioredis
+from app.core.cache import URLCacheManager, get_redis
 
+logger = logging.getLogger("url_shortener.api")
 router = APIRouter(prefix="/urls", tags=["URLs"])
-
-
-def get_redis() -> aioredis.Redis:
-    return aioredis.from_url(settings.redis_url, decode_responses=True)
 
 
 @router.post("", response_model=URLResponse, status_code=status.HTTP_201_CREATED)
 async def create_short_url(
     payload: URLCreateRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis_client: aioredis.Redis = Depends(get_redis)
 ):
     """
-    Creates a shortened URL:
-    - If custom_alias is provided: validates format, reserves slug, checks collision.
-    - If no alias: generates collision-free Base62 code over monotonic DB sequence.
-    - Updates Redis Bloom Filter and caches entry to prevent cache penetration.
+    Creates a shortened URL. If custom alias is omitted, generates a Base62
+    slug derived from the database sequence counter.
     """
-    redis_client = get_redis()
     cache_mgr = URLCacheManager(redis_client)
     bloom = RedisBloomFilter(redis_client)
 
@@ -51,21 +45,17 @@ async def create_short_url(
     if payload.custom_alias:
         alias = payload.custom_alias.strip()
         if not validate_custom_alias(alias):
-            await redis_client.aclose()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Custom alias contains invalid characters or is a reserved keyword."
+                detail="Custom alias contains invalid characters or shadows a reserved keyword."
             )
 
-        # Check collision in DB
         stmt = select(URL).where(URL.short_code == alias)
         result = await db.execute(stmt)
-        existing = result.scalar_one_or_none()
-        if existing:
-            await redis_client.aclose()
+        if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"The alias '{alias}' is already in use. Please choose another."
+                detail=f"The alias '{alias}' is already in use."
             )
 
         new_url = URL(
@@ -78,10 +68,10 @@ async def create_short_url(
         await db.flush()
         short_code = alias
     else:
-        # Monotonic sequence generation: Insert temporary record to allocate sequence ID
-        temp_code = f"tmp_{datetime.now(timezone.utc).timestamp()}"
+        # Pre-allocate record with unique temporary slug to obtain database sequence ID
+        temporary_slug = f"pend_{uuid.uuid4().hex[:16]}"
         new_url = URL(
-            short_code=temp_code,
+            short_code=temporary_slug,
             original_url=target_url_str,
             is_custom=False,
             expires_at=expires_at
@@ -89,12 +79,10 @@ async def create_short_url(
         db.add(new_url)
         await db.flush()
 
-        # Bijective Base62 encoding over sequence ID + offset
         short_code = encode(new_url.id + settings.BASE62_ID_OFFSET)
         new_url.short_code = short_code
         await db.flush()
 
-    # Add to Bloom filter and cache
     try:
         await bloom.add(short_code)
         await cache_mgr.set_url(
@@ -105,11 +93,8 @@ async def create_short_url(
                 "expires_at": expires_at.isoformat() if expires_at else None
             }
         )
-    except Exception:
-        # If redis is temporarily unavailable, DB write succeeds
-        pass
-    finally:
-        await redis_client.aclose()
+    except Exception as err:
+        logger.warning("Failed to warm cache for %s: %s", short_code, err)
 
     return URLResponse(
         short_code=short_code,
@@ -127,25 +112,24 @@ async def get_url_metadata(
     short_code: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """Retrieves URL metadata by short code."""
     stmt = select(URL).where(URL.short_code == short_code, URL.is_active == True)
     result = await db.execute(stmt)
-    url_obj = result.scalar_one_or_none()
+    url_record = result.scalar_one_or_none()
 
-    if not url_obj:
+    if not url_record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="URL not found or has been deactivated."
         )
 
     return URLResponse(
-        short_code=url_obj.short_code,
-        short_url=f"{settings.BASE_URL}/r/{url_obj.short_code}",
-        original_url=url_obj.original_url,
-        is_custom=url_obj.is_custom,
-        created_at=url_obj.created_at,
-        expires_at=url_obj.expires_at,
-        clicks_count=url_obj.clicks_count
+        short_code=url_record.short_code,
+        short_url=f"{settings.BASE_URL}/r/{url_record.short_code}",
+        original_url=url_record.original_url,
+        is_custom=url_record.is_custom,
+        created_at=url_record.created_at,
+        expires_at=url_record.expires_at,
+        clicks_count=url_record.clicks_count
     )
 
 
@@ -154,25 +138,17 @@ async def get_url_analytics(
     short_code: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Returns rich analytics for a short URL:
-    - Total clicks and unique visitor counts
-    - Referrer breakdown
-    - Country / Geo breakdown
-    - Browser & OS distributions
-    - Last 24-hour hourly timeseries
-    """
     stmt = select(URL).where(URL.short_code == short_code)
     result = await db.execute(stmt)
-    url_obj = result.scalar_one_or_none()
+    url_record = result.scalar_one_or_none()
 
-    if not url_obj:
+    if not url_record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="URL not found."
         )
 
-    # Unique visitors count
+    # Unique visitors based on pseudonymized IP hash
     unique_stmt = select(func.count(func.distinct(ClickEvent.ip_hash))).where(
         ClickEvent.short_code == short_code
     )
@@ -198,7 +174,7 @@ async def get_url_analytics(
     )
     top_countries = dict((await db.execute(geo_stmt)).all())
 
-    # Browsers
+    # Browser distribution
     browser_stmt = (
         select(ClickEvent.browser, func.count(ClickEvent.id))
         .where(ClickEvent.short_code == short_code)
@@ -208,7 +184,7 @@ async def get_url_analytics(
     )
     browsers = dict((await db.execute(browser_stmt)).all())
 
-    # OS / Platforms
+    # Operating systems
     os_stmt = (
         select(ClickEvent.os, func.count(ClickEvent.id))
         .where(ClickEvent.short_code == short_code)
@@ -218,7 +194,7 @@ async def get_url_analytics(
     )
     platforms = dict((await db.execute(os_stmt)).all())
 
-    # Devices
+    # Device types
     device_stmt = (
         select(ClickEvent.device, func.count(ClickEvent.id))
         .where(ClickEvent.short_code == short_code)
@@ -228,7 +204,7 @@ async def get_url_analytics(
     )
     devices = dict((await db.execute(device_stmt)).all())
 
-    # Last 24 hours timeline
+    # Hourly timeseries for the last 24 hours
     now = datetime.now(timezone.utc)
     since = now - timedelta(hours=24)
     timeline_stmt = (
@@ -251,8 +227,8 @@ async def get_url_analytics(
 
     return URLAnalyticsResponse(
         short_code=short_code,
-        original_url=url_obj.original_url,
-        total_clicks=url_obj.clicks_count,
+        original_url=url_record.original_url,
+        total_clicks=url_record.clicks_count,
         unique_visitors=unique_visitors,
         top_referrers=top_referrers,
         top_countries=top_countries,
@@ -266,26 +242,25 @@ async def get_url_analytics(
 @router.delete("/{short_code}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_short_url(
     short_code: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis_client: aioredis.Redis = Depends(get_redis)
 ):
-    """Soft-deletes URL and immediately purges from Redis cache."""
     stmt = select(URL).where(URL.short_code == short_code)
     result = await db.execute(stmt)
-    url_obj = result.scalar_one_or_none()
+    url_record = result.scalar_one_or_none()
 
-    if not url_obj:
+    if not url_record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="URL not found."
         )
 
-    url_obj.is_active = False
+    url_record.is_active = False
     await db.flush()
 
     try:
-        redis_client = get_redis()
         cache_mgr = URLCacheManager(redis_client)
         await cache_mgr.invalidate_url(short_code)
-        await redis_client.aclose()
-    except Exception as e:
-        logger.warning("Cache invalidation failed for URL ID %d: %s", url_obj.id, e)
+    except Exception as err:
+        logger.warning("Cache invalidation failed for URL %s: %s", short_code, err)
+

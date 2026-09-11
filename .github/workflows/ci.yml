@@ -41,14 +41,7 @@ jobs:
       run: |
         flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
 
-    - name: Run Core Algorithmic & Unit Tests
+    - name: Run Test Suite
       run: |
         PYTHONPATH=. python3 -m unittest discover -s tests -p "test_base62.py" -v
-
-    - name: Run Integration & Bloom Filter Tests
-      run: |
-        PYTHONPATH=. python3 -m pytest tests/test_bloom.py -v
-
-    - name: Run Interactive Demo Verification
-      run: |
-        python3 scripts/demo.py
+        PYTHONPATH=. pytest tests/test_bloom.py tests/test_api.py -v
