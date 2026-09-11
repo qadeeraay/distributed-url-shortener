@@ -22,7 +22,7 @@ class URL(Base):
     """
     __tablename__ = "urls"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     short_code = Column(String(32), unique=True, nullable=False, index=True)
     original_url = Column(Text, nullable=False)
     is_custom = Column(Boolean, default=False, nullable=False)
@@ -49,7 +49,7 @@ class ClickEvent(Base):
     """
     __tablename__ = "click_events"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     short_code = Column(String(32), nullable=False, index=True)
     clicked_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     ip_hash = Column(String(64), nullable=True)  # Salted pseudonymized hash for GDPR compliance
@@ -72,7 +72,7 @@ class HourlyAnalytics(Base):
     """
     __tablename__ = "hourly_analytics"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     short_code = Column(String(32), nullable=False, index=True)
     bucket_hour = Column(DateTime(timezone=True), nullable=False)
     clicks = Column(Integer, default=0, nullable=False)

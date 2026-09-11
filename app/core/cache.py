@@ -5,23 +5,34 @@ import redis.asyncio as redis
 from app.config import settings
 from app.core.metrics import CACHE_OPERATIONS_TOTAL
 
+import asyncio
+
 logger = logging.getLogger("url_shortener.cache")
 
 _redis_pool: Optional[redis.Redis] = None
+_pool_loop = None
 
 
 async def get_redis_pool() -> redis.Redis:
-    global _redis_pool
-    if _redis_pool is None:
+    global _redis_pool, _pool_loop
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if _redis_pool is None or (_pool_loop is not None and _pool_loop != loop):
         _redis_pool = redis.from_url(settings.redis_url, decode_responses=True)
+        _pool_loop = loop
     return _redis_pool
 
 
 async def close_redis_pool() -> None:
-    global _redis_pool
+    global _redis_pool, _pool_loop
     if _redis_pool is not None:
         await _redis_pool.aclose()
         _redis_pool = None
+        _pool_loop = None
+
 
 
 async def get_redis() -> redis.Redis:
