@@ -12,12 +12,11 @@ RESERVED_ROUTES = {
 }
 
 
+_CHAR_TO_INDEX = {c: i for i, c in enumerate(BASE62_ALPHABET)}
+
+
 def encode(num: int) -> str:
-    """
-    Bijectively encodes a non-negative integer into a Base62 string.
-    Guarantees 0% collision probability when derived from a monotonic sequence.
-    Complexity: O(log_62(num)) - negligible overhead (<1 microsecond).
-    """
+    """Bijectively encodes a non-negative integer into a Base62 string."""
     if num < 0:
         raise ValueError("Cannot encode negative integers.")
     if num == 0:
@@ -25,26 +24,20 @@ def encode(num: int) -> str:
 
     arr = []
     while num > 0:
-        rem = num % BASE
+        num, rem = divmod(num, BASE)
         arr.append(BASE62_ALPHABET[rem])
-        num //= BASE
-
-    arr.reverse()
-    return "".join(arr)
+    return "".join(reversed(arr))
 
 
 def decode(code: str) -> int:
-    """
-    Decodes a Base62 string back into its original integer sequence ID.
-    Complexity: O(k) where k is the string length.
-    """
+    """Decodes a Base62 string back into its original integer ID."""
     if not code:
         raise ValueError("Cannot decode an empty string.")
 
     num = 0
     for char in code:
-        idx = BASE62_ALPHABET.find(char)
-        if idx == -1:
+        idx = _CHAR_TO_INDEX.get(char)
+        if idx is None:
             raise ValueError(f"Invalid Base62 character: '{char}'")
         num = num * BASE + idx
     return num
